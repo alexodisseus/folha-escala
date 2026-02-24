@@ -95,7 +95,7 @@ class PeriodoMensal(db.Model):
         else:
             data_fim = date(ano, mes + 1, 9)
         
-        nome = f"Período {mes:02d}/{mes+1 if mes<12 else 1:02d} {ano}"
+        nome = f"Período {mes:02d}/{ano}"
         mes_referencia = mes
         
         # Criar período
