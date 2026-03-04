@@ -117,7 +117,7 @@ config/production.local.py
 
 # Relatórios
 reports/
-*.html
+
 *.pdf
 
 # Virtual environment (específico para diferentes gerenciadores)

@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- MENSAGENS FLASH -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>
+        Períodos Mensais
+        <span class="badge bg-info">Total: {{ periodos.total }}</span>
+    </h4>
+
+    <form class="d-flex" method="get">
+        <input type="hidden" name="ano" value="{{ filtro_ano }}">
+        <input type="hidden" name="mes" value="{{ filtro_mes }}">
+        <input name="busca" value="{{ busca }}" class="form-control me-2" placeholder="Buscar período...">
+        <button class="btn btn-outline-primary">Buscar</button>
+    </form>
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Ano</label>
+                <select name="ano" class="form-select">
+                    <option value="">Todos</option>
+                    {% for ano in anos_disponiveis %}
+                    <option value="{{ ano }}" {% if filtro_ano == ano|string %}selected{% endif %}>
+                        {{ ano }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Mês</label>
+                <select name="mes" class="form-select">
+                    <option value="">Todos</option>
+                    {% for valor, nome in meses %}
+                    <option value="{{ valor }}" {% if filtro_mes == valor|string %}selected{% endif %}>
+                        {{ nome }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">Filtrar</button>
+                <a href="{{ url_for('periodo.periodos') }}" class="btn btn-secondary">Limpar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#modalNovo">
+    + Novo Período
+</button>
+
+<div class="card shadow">
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Nome</th>
+                    <th>Período</th>
+                    <th>Duração</th>
+                    <th>Sábados</th>
+                    <th>Domingos</th>
+                    <th>Feriados</th>
+                    <th>Dias Úteis</th>
+                    <th width="180">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in periodos.items %}
+                <tr>
+                    <td>{{ p.nome }}</td>
+                    <td>
+                        <small>
+                            {{ p.data_inicio.strftime('%d/%m/%Y') }}<br>
+                            até {{ p.data_fim.strftime('%d/%m/%Y') }}
+                        </small>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-secondary">
+                            {{ (p.data_fim - p.data_inicio).days + 1 }} dias
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-info">{{ p.qtd_sabados }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-warning">{{ p.qtd_domingos }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-danger">{{ p.qtd_feriados }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-success">
+                            {{ p.get_dias_uteis() }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('periodo.escala_periodo', id=p.id) }}" 
+                           class="btn btn-sm btn-info"
+                           title="Detalhes">
+                            👁️
+                        </a>
+                        
+                        <button class="btn btn-sm btn-warning"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editar{{ p.id }}"
+                                title="Editar">
+                            ✏️
+                        </button>
+
+                        <button class="btn btn-sm btn-danger"
+                                onclick="confirmarExclusao({{ p.id }}, '{{ p.nome }}')"
+                                title="Excluir"
+                                {% if p.dias_trabalhados.count() > 0 %}disabled{% endif %}>
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+
+                <!-- MODAL EDITAR -->
+                <div class="modal fade" id="editar{{ p.id }}" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form method="POST" action="{{ url_for('periodo.editar_periodo', id=p.id) }}">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Editar Período</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Nome do Período</label>
+                                        <input name="nome" value="{{ p.nome }}" class="form-control" required>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Ano</label>
+                                            <select name="ano" class="form-select" required>
+                                                {% for ano in range(2020, 2030) %}
+                                                <option value="{{ ano }}" {% if p.ano == ano %}selected{% endif %}>
+                                                    {{ ano }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Mês Referência</label>
+                                            <select name="mes" class="form-select" required>
+                                                {% for valor, nome in meses %}
+                                                <option value="{{ valor }}" {% if p.mes_referencia == valor %}selected{% endif %}>
+                                                    {{ nome }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Data Início</label>
+                                            <input type="date" name="data_inicio" 
+                                                   value="{{ p.data_inicio.strftime('%Y-%m-%d') }}" 
+                                                   class="form-control">
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Data Fim</label>
+                                            <input type="date" name="data_fim" 
+                                                   value="{{ p.data_fim.strftime('%Y-%m-%d') }}" 
+                                                   class="form-control">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="alert alert-info">
+                                        <small>
+                                            <strong>Datas calculadas automaticamente:</strong><br>
+                                            Início: 10 do mês selecionado<br>
+                                            Fim: 09 do mês seguinte
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-success">Salvar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center py-4">
+                        <div class="alert alert-info mb-0">
+                            Nenhum período encontrado.
+                            <button class="btn btn-primary btn-sm ms-3" data-bs-toggle="modal" data-bs-target="#modalNovo">
+                                Criar primeiro período
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PAGINAÇÃO -->
+{% if periodos.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination justify-content-center">
+        {% if periodos.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('periodo.periodos', page=periodos.prev_num, busca=busca, ano=filtro_ano, mes=filtro_mes) }}">
+                Anterior
+            </a>
+        </li>
+        {% endif %}
+
+        {% for page_num in periodos.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+            {% if page_num %}
+                <li class="page-item {% if page_num == periodos.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('periodo.periodos', page=page_num, busca=busca, ano=filtro_ano, mes=filtro_mes) }}">
+                        {{ page_num }}
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        {% if periodos.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('periodo.periodos', page=periodos.next_num, busca=busca, ano=filtro_ano, mes=filtro_mes) }}">
+                Próxima
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- MODAL NOVO -->
+<div class="modal fade" id="modalNovo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('periodo.novo_periodo') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Novo Período</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Ano</label>
+                            <select name="ano" class="form-select" required id="anoSelect">
+                                {% set ano_atual = now.year %}
+                                {% for ano in range(ano_atual - 2, ano_atual + 3) %}
+                                <option value="{{ ano }}" {% if ano == ano_atual %}selected{% endif %}>
+                                    {{ ano }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Mês de Referência</label>
+                            <select name="mes" class="form-select" required id="mesSelect">
+                                <option value="">Selecione...</option>
+                                {% for valor, nome in meses %}
+                                <option value="{{ valor }}">{{ nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info" id="infoPeriodo" style="display: none;">
+                        <strong>Período calculado:</strong><br>
+                        <span id="dataInicio"></span> até <span id="dataFim"></span>
+                    </div>
+                    
+                    <div class="alert alert-warning" id="avisoExistente" style="display: none;">
+                        ⚠️ Já existe um período para este mês/ano!
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSalvar" disabled>Criar Período</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EXCLUSÃO -->
+<div class="modal fade" id="modalExcluir" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o período <strong id="periodoNome"></strong>?</p>
+                <p class="text-danger"><small>Esta ação não poderá ser desfeita.</small></p>
+            </div>
+            <div class="modal-footer">
+                <form method="POST" action="" id="formExcluir">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para calcular datas do período
+function calcularDatasPeriodo(ano, mes) {
+    if (!ano || !mes) return null;
+    
+    let dataInicio = new Date(ano, mes - 1, 10);
+    let dataFim;
+    
+    if (mes == 12) {
+        dataFim = new Date(parseInt(ano) + 1, 0, 9); // Janeiro do próximo ano
+    } else {
+        dataFim = new Date(ano, mes, 9); // Mês seguinte
+    }
+    
+    return {
+        inicio: dataInicio.toLocaleDateString('pt-BR'),
+        fim: dataFim.toLocaleDateString('pt-BR')
+    };
+}
+
+// Validação do formulário novo período
+document.getElementById('mesSelect')?.addEventListener('change', verificarPeriodo);
+document.getElementById('anoSelect')?.addEventListener('change', verificarPeriodo);
+
+function verificarPeriodo() {
+    const ano = document.getElementById('anoSelect').value;
+    const mes = document.getElementById('mesSelect').value;
+    const infoPeriodo = document.getElementById('infoPeriodo');
+    const avisoExistente = document.getElementById('avisoExistente');
+    const btnSalvar = document.getElementById('btnSalvar');
+    
+    if (ano && mes) {
+        // Calcular e mostrar datas
+        const datas = calcularDatasPeriodo(ano, mes);
+        if (datas) {
+            document.getElementById('dataInicio').textContent = datas.inicio;
+            document.getElementById('dataFim').textContent = datas.fim;
+            infoPeriodo.style.display = 'block';
+        }
+        
+        // Verificar se período já existe
+        fetch(`/api/periodos/verificar_disponibilidade?ano=${ano}&mes=${mes}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.disponivel) {
+                    avisoExistente.style.display = 'none';
+                    btnSalvar.disabled = false;
+                } else {
+                    avisoExistente.style.display = 'block';
+                    btnSalvar.disabled = true;
+                }
+            });
+    } else {
+        infoPeriodo.style.display = 'none';
+        avisoExistente.style.display = 'none';
+        btnSalvar.disabled = true;
+    }
+}
+
+// Função para confirmar exclusão
+function confirmarExclusao(id, nome) {
+    const modal = new bootstrap.Modal(document.getElementById('modalExcluir'));
+    document.getElementById('periodoNome').textContent = nome;
+    document.getElementById('formExcluir').action = "{{ url_for('periodo.excluir_periodo', id=0) }}".replace('0', id);
+    modal.show();
+}
+
+// Recalcular estatísticas de um período (opcional)
+function recalcularPeriodo(id) {
+    if (confirm('Deseja recalcular as estatísticas deste período?')) {
+        window.location.href = "{{ url_for('periodo.recalcular_periodo', id=0) }}".replace('0', id);
+    }
+}
+</script>
+
+{% endblock %}

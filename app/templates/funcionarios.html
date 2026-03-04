@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- MENSAGENS FLASH -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>
+        Funcionários
+        <span class="badge bg-success">Ativos: {{ total_ativos }}</span>
+    </h4>
+
+    <form class="d-flex" method="get">
+        <input type="hidden" name="periodo" value="{{ filtro_periodo }}">
+        <input type="hidden" name="escala" value="{{ filtro_escala }}">
+        <input type="hidden" name="ativo" value="{{ filtro_ativo }}">
+        <input name="busca" value="{{ busca }}" class="form-control me-2" placeholder="Buscar por nome">
+        <button class="btn btn-outline-primary">Buscar</button>
+    </form>
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Período</label>
+                <select name="periodo" class="form-select">
+                    <option value="">Todos</option>
+                    {% for periodo in periodos %}
+                    <option value="{{ periodo }}" {% if filtro_periodo == periodo %}selected{% endif %}>
+                        {{ periodo|capitalize }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Escala</label>
+                <select name="escala" class="form-select">
+                    <option value="">Todas</option>
+                    {% for escala in escalas %}
+                    <option value="{{ escala }}" {% if filtro_escala == escala %}selected{% endif %}>
+                        Escala {{ escala }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select name="ativo" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="true" {% if filtro_ativo == 'true' %}selected{% endif %}>Ativos</option>
+                    <option value="false" {% if filtro_ativo == 'false' %}selected{% endif %}>Inativos</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary me-2">Filtrar</button>
+                <a href="{{ url_for('main.funcionarios') }}" class="btn btn-secondary">Limpar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#modalNovo">
+    + Novo Funcionário
+</button>
+
+<div class="card shadow">
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Nome</th>
+                    <th>Matrícula</th>
+                    <th>Período</th>
+                    <th>Escala</th>
+                    <th>Status</th>
+                    <th width="180">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in funcionarios.items %}
+                <tr>
+                    <td>{{ f.nome }}</td>
+                    <td>{{ f.matricula }}</td>
+                    <td>
+                        {% if f.periodo == 'manhã' %}
+                            <span class="badge bg-info">Manhã</span>
+                        {% elif f.periodo == 'tarde' %}
+                            <span class="badge bg-warning">Tarde</span>
+                        {% elif f.periodo == 'noite' %}
+                            <span class="badge bg-dark">Noite</span>
+                        {% else %}
+                            {{ f.periodo }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary">Escala {{ f.escala }}</span>
+                    </td>
+                    <td>
+                        {% if f.ativo %}
+                            <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-info" 
+                                onclick="verDetalhes({{ f.id }})"
+                                title="Detalhes">
+                            👁️
+                        </button>
+                        
+                        <button class="btn btn-sm btn-warning"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editar{{ f.id }}"
+                                title="Editar">
+                            ✏️
+                        </button>
+
+                        <a href="{{ url_for('main.toggle_funcionario', id=f.id) }}"
+                           class="btn btn-sm {% if f.ativo %}btn-danger{% else %}btn-success{% endif %}"
+                           onclick="return confirm('Tem certeza que deseja {% if f.ativo %}desativar{% else %}ativar{% endif %} este funcionário?')"
+                           title="{% if f.ativo %}Desativar{% else %}Ativar{% endif %}">
+                            {% if f.ativo %}🔴{% else %}🟢{% endif %}
+                        </a>
+                    </td>
+                </tr>
+
+                <!-- MODAL EDITAR -->
+                <div class="modal fade" id="editar{{ f.id }}" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form method="POST" action="{{ url_for('main.editar_funcionario', id=f.id) }}">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Editar Funcionário</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Nome</label>
+                                        <input name="nome" value="{{ f.nome }}" class="form-control" required>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Matrícula</label>
+                                        <input name="matricula" value="{{ f.matricula }}" class="form-control" required>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Período</label>
+                                        <select name="periodo" class="form-select" required>
+                                            <option value="manhã" {% if f.periodo == 'manhã' %}selected{% endif %}>Manhã</option>
+                                            <option value="tarde" {% if f.periodo == 'tarde' %}selected{% endif %}>Tarde</option>
+                                            <option value="noite" {% if f.periodo == 'noite' %}selected{% endif %}>Noite</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Escala</label>
+                                        <select name="escala" class="form-select" required>
+                                            <option value="A" {% if f.escala == 'A' %}selected{% endif %}>Escala A</option>
+                                            <option value="B" {% if f.escala == 'B' %}selected{% endif %}>Escala B</option>
+                                            <option value="C" {% if f.escala == 'C' %}selected{% endif %}>Escala C</option>
+                                            <option value="D" {% if f.escala == 'D' %}selected{% endif %}>Escala D</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-success">Salvar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PAGINAÇÃO -->
+{% if funcionarios.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination justify-content-center">
+        {% if funcionarios.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.funcionarios', page=funcionarios.prev_num, busca=busca, periodo=filtro_periodo, escala=filtro_escala, ativo=filtro_ativo) }}">Anterior</a>
+        </li>
+        {% endif %}
+
+        {% for page_num in funcionarios.iter_pages(left_edge=2, left_current=2, right_current=2, right_edge=2) %}
+            {% if page_num %}
+                <li class="page-item {% if page_num == funcionarios.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('main.funcionarios', page=page_num, busca=busca, periodo=filtro_periodo, escala=filtro_escala, ativo=filtro_ativo) }}">
+                        {{ page_num }}
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        {% if funcionarios.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.funcionarios', page=funcionarios.next_num, busca=busca, periodo=filtro_periodo, escala=filtro_escala, ativo=filtro_ativo) }}">Próxima</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- MODAL NOVO -->
+<div class="modal fade" id="modalNovo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('main.novo_funcionario') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Novo Funcionário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome</label>
+                        <input name="nome" class="form-control" placeholder="Nome completo" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Matrícula</label>
+                        <input name="matricula" class="form-control" placeholder="Número da matrícula" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Período</label>
+                        <select name="periodo" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            <option value="manhã">Manhã</option>
+                            <option value="tarde">Tarde</option>
+                            <option value="noite">Noite</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Escala</label>
+                        <select name="escala" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            <option value="A">Escala A</option>
+                            <option value="B">Escala B</option>
+                            <option value="C">Escala C</option>
+                            <option value="D">Escala D</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes (opcional) -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detalhes do Funcionário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detalhesContent">
+                <!-- Conteúdo carregado via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verDetalhes(id) {
+    // Aqui você pode fazer uma requisição AJAX para buscar os detalhes
+    // Por enquanto, vamos redirecionar para uma página de detalhes
+    window.location.href = "{{ url_for('main.detalhes_funcionario', id=0) }}".replace('0', id);
+}
+</script>
+
+{% endblock %}

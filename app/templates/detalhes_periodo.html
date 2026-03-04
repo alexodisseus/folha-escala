@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- MENSAGENS FLASH -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>
+        Detalhes do Período
+        <span class="badge bg-info">{{ periodo.nome }}</span>
+    </h4>
+    
+    <div>
+        <a href="{{ url_for('periodo.periodos') }}" class="btn btn-secondary">
+            ← Voltar para Períodos
+        </a>
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalEditar">
+            ✏️ Editar Período
+        </button>
+        <a href="{{ url_for('periodo.recalcular_periodo', id=periodo.id) }}" 
+           class="btn btn-info"
+           onclick="return confirm('Recalcular estatísticas deste período?')">
+            🔄 Recalcular
+        </a>
+    </div>
+</div>
+
+<!-- CARD COM INFORMAÇÕES DO PERÍODO -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-header">Período</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ periodo.data_inicio.strftime('%d/%m/%Y') }}</h5>
+                <p class="card-text">até {{ periodo.data_fim.strftime('%d/%m/%Y') }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-success mb-3">
+            <div class="card-header">Dias Úteis</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ periodo.get_dias_uteis() }}</h5>
+                <p class="card-text">dias para trabalho</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="card text-white bg-info mb-3">
+            <div class="card-header">Sábados</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ periodo.qtd_sabados }}</h5>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="card text-white bg-warning mb-3">
+            <div class="card-header">Domingos</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ periodo.qtd_domingos }}</h5>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="card text-white bg-danger mb-3">
+            <div class="card-header">Feriados</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ periodo.qtd_feriados }}</h5>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- RESUMO RÁPIDO -->
+<div class="alert alert-info mb-4">
+    <strong>📊 Resumo do período:</strong> 
+    Total de {{ total_dias }} dias ({{ periodo.qtd_sabados + periodo.qtd_domingos + periodo.qtd_feriados }} dias não úteis)
+</div>
+
+<!-- TABELA DE FUNCIONÁRIOS E DIAS TRABALHADOS -->
+<div class="card shadow">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Funcionários e Dias Trabalhados</h5>
+        <span class="badge bg-light text-dark">Total: {{ dados_funcionarios|length }}</span>
+    </div>
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Funcionário</th>
+                    <th>Matrícula</th>
+                    <th>Período</th>
+                    <th>Escala</th>
+                    <th class="text-center">Dias Normais</th>
+                    <th class="text-center">Dias Extras</th>
+                    <th class="text-center">Total</th>
+                    <th class="text-center">Aproveitamento</th>
+                    <th width="100">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in dados_funcionarios %}
+                <tr>
+                    <td>
+                        <strong>{{ item.funcionario.nome }}</strong>
+                    </td>
+                    <td>{{ item.funcionario.matricula }}</td>
+                    <td>
+                        <span class="badge bg-info">{{ item.funcionario.periodo|capitalize }}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary">Escala {{ item.funcionario.escala }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-success">{{ item.dias_normais }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-warning">{{ item.dias_extras }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-primary">{{ item.total_dias }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if periodo.get_dias_uteis() > 0 %}
+                            {% set percentual = (item.total_dias / periodo.get_dias_uteis() * 100)|round(1) %}
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar {% if percentual < 50 %}bg-danger{% elif percentual < 80 %}bg-warning{% else %}bg-success{% endif %}" 
+                                     role="progressbar" 
+                                     style="width: {{ percentual }}%;"
+                                     aria-valuenow="{{ percentual }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    {{ percentual }}%
+                                </div>asd
+                            </div>
+                        {% else %}
+                            <span class="text-muted">asdasd</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        
+                        <button class="btn btn-sm btn-success"
+                                onclick="registrarDia({{ item.funcionario.id }}, '{{ item.funcionario.nome }}')"
+                                title="Registrar dia trabalhado">
+                            ➕
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center py-4">
+                        <div class="alert alert-warning mb-0">
+                            Nenhum funcionário ativo encontrado.
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+<!-- MODAL EDITAR PERÍODO -->
+<div class="modal fade" id="modalEditar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('periodo.editar_periodo', id=periodo.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Período</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome do Período</label>
+                        <input name="nome" value="{{ periodo.nome }}" class="form-control" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Ano</label>
+                            <select name="ano" class="form-select" required>
+                                {% for ano in range(2020, 2030) %}
+                                <option value="{{ ano }}" {% if periodo.ano == ano %}selected{% endif %}>
+                                    {{ ano }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Mês Referência</label>
+                            <select name="mes" class="form-select" required>
+                                {% set meses = [
+                                    (1, 'Janeiro'), (2, 'Fevereiro'), (3, 'Março'), (4, 'Abril'),
+                                    (5, 'Maio'), (6, 'Junho'), (7, 'Julho'), (8, 'Agosto'),
+                                    (9, 'Setembro'), (10, 'Outubro'), (11, 'Novembro'), (12, 'Dezembro')
+                                ] %}
+                                {% for valor, nome in meses %}
+                                <option value="{{ valor }}" {% if periodo.mes_referencia == valor %}selected{% endif %}>
+                                    {{ nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Data Início</label>
+                            <input type="date" name="data_inicio" 
+                                   value="{{ periodo.data_inicio.strftime('%Y-%m-%d') }}" 
+                                   class="form-control">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Data Fim</label>
+                            <input type="date" name="data_fim" 
+                                   value="{{ periodo.data_fim.strftime('%Y-%m-%d') }}" 
+                                   class="form-control">
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <small>
+                            <strong>Atenção:</strong> Alterar as datas pode afetar os registros de dias trabalhados.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL REGISTRAR DIA (placeholder - implementar depois) -->
+<div class="modal fade" id="modalRegistrarDia" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Registrar Dia Trabalhado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Funcionalidade em desenvolvimento...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function registrarDia(funcionarioId, funcionarioNome) {
+    // Placeholder - implementar depois
+    alert(`Registrar dia para ${funcionarioNome} - ID: ${funcionarioId}`);
+    // const modal = new bootstrap.Modal(document.getElementById('modalRegistrarDia'));
+    // modal.show();
+}
+</script>
+
+<style>
+.progress {
+    background-color: #e9ecef;
+    border-radius: 10px;
+}
+.progress-bar {
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+.card {
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+</style>
+
+{% endblock %}
