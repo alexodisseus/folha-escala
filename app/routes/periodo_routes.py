@@ -1,8 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from app import db
-from app.models.funcionario import PeriodoMensal, DiaTrabalhado, Funcionario
+from app.models.funcionario import PeriodoMensal, DiaTrabalhado, Funcionario , HoraExtra
 
 from datetime import datetime, date, timedelta
+
+
+
 
 # Se você já tem um Blueprint 'main', pode adicionar estas rotas nele
 # ou criar um novo blueprint específico para períodos
@@ -103,14 +106,99 @@ def novo_periodo():
     return redirect(url_for("periodo.periodos"))
 
 
+
+
+
+
+
+
 @periodo.route("/periodos/escala/<int:id>")
 def escala_periodo(id):
     """Mostra a escala de serviço do período"""
     
     periodo = PeriodoMensal.query.get_or_404(id)
     
-    # Buscar todos os funcionários ativos
-    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    
+    horas_extras = HoraExtra.query.filter_by(periodo_id=id).all()
+    # Criar um dicionário para fácil consulta: (funcionario_id, data) -> True
+    horas_extras_dict = {}
+    for he in horas_extras:
+        chave = (he.funcionario_id, he.data.strftime('%Y-%m-%d'))
+        horas_extras_dict[chave] = he
+    
+    # Buscar todos os funcionários
+    query = Funcionario.query
+    
+    # --- APLICAR FILTROS ---
+    
+    # Filtro por nome (busca parcial)
+    nome = request.args.get('nome')
+    if nome:
+        query = query.filter(Funcionario.nome.ilike(f'%{nome}%'))
+    
+    # Filtro por matrícula
+    matricula = request.args.get('matricula')
+    if matricula:
+        query = query.filter(Funcionario.matricula.ilike(f'%{matricula}%'))
+    
+    # Filtro por escala
+    escala = request.args.get('escala')
+    if escala:
+        query = query.filter(Funcionario.escala == escala)
+    
+    # Filtro por período
+    periodo_filtro = request.args.get('periodo')
+    if periodo_filtro:
+        query = query.filter(Funcionario.periodo == periodo_filtro)
+    
+    # Filtro por status (ativo/inativo)
+    status = request.args.get('status')
+    if status == 'ativos':
+        query = query.filter_by(ativo=True)
+    elif status == 'inativos':
+        query = query.filter_by(ativo=False)
+    else:  # 'todos' ou None
+        # Por padrão, mostra apenas ativos se não especificado
+        if not status:
+            query = query.filter_by(ativo=True)
+    
+    # Filtro por data de admissão (range)
+    data_admissao_inicio = request.args.get('data_admissao_inicio')
+    if data_admissao_inicio:
+        try:
+            data_inicio = datetime.strptime(data_admissao_inicio, '%Y-%m-%d').date()
+            query = query.filter(Funcionario.data_admissao >= data_inicio)
+        except ValueError:
+            pass
+    
+    data_admissao_fim = request.args.get('data_admissao_fim')
+    if data_admissao_fim:
+        try:
+            data_fim = datetime.strptime(data_admissao_fim, '%Y-%m-%d').date()
+            query = query.filter(Funcionario.data_admissao <= data_fim)
+        except ValueError:
+            pass
+    
+    # --- ORDENAÇÃO ---
+    ordenar_por = request.args.get('ordenar', 'nome')
+    ordem = request.args.get('ordem', 'asc')
+    
+    # Mapear campos para ordenação
+    campos_ordenacao = {
+        'nome': Funcionario.nome,
+        'matricula': Funcionario.matricula,
+        'escala': Funcionario.escala,
+        'periodo': Funcionario.periodo
+    }
+    
+    # Definir o campo de ordenação
+    campo = campos_ordenacao.get(ordenar_por, Funcionario.nome)
+    
+    if ordem == 'desc':
+        campo = campo.desc()
+    
+    # Executar a query com ordenação
+    funcionarios = query.order_by(campo).all()
     
     # Gerar lista de datas do período
     datas = []
@@ -118,6 +206,7 @@ def escala_periodo(id):
     while data_atual <= periodo.data_fim:
         datas.append({
             'data': data_atual,
+            'data_str': data_atual.strftime('%Y-%m-%d'),
             'dia': data_atual.strftime('%d'),
             'dia_semana': data_atual.weekday(),  # 0=segunda, 5=sábado, 6=domingo
             'nome_dia': data_atual.strftime('%A').capitalize()
@@ -133,16 +222,113 @@ def escala_periodo(id):
         'D': [2, 3, 4, 5, 6]       # Quarta a Domingo
     }
     
+    # Calcular totais por dia para o rodapé (incluindo horas extras)
+    totais_por_dia = []
+    for item in datas:
+        count = 0
+        dia_semana = item['dia_semana']
+        data_str = item['data_str']
+        
+        for func in funcionarios:
+            # Verificar se o funcionário trabalha neste dia da semana (escala normal)
+            trabalha_normal = func.escala in escala_dias and dia_semana in escala_dias[func.escala]
+            
+            # Verificar se tem hora extra neste dia
+            chave_he = (func.id, data_str)
+            tem_hora_extra = chave_he in horas_extras_dict
+            
+            # Se trabalha normal OU tem hora extra, conta no total
+            if trabalha_normal or tem_hora_extra:
+                count += 1
+        
+        totais_por_dia.append(count)
+    
+    # Estatísticas para os filtros
+    total_funcionarios = Funcionario.query.count()
+    total_ativos = Funcionario.query.filter_by(ativo=True).count()
+    total_inativos = Funcionario.query.filter_by(ativo=False).count()
+    
+    # Contar por escala
+    contagem_escalas = {}
+    for escala_opcao in ['A', 'B', 'C', 'D']:
+        contagem_escalas[escala_opcao] = Funcionario.query.filter_by(escala=escala_opcao).count()
+    
+    # Contar por período
+    contagem_periodos = {}
+    for periodo_opcao in ['manhã', 'tarde', 'noite']:
+        contagem_periodos[periodo_opcao] = Funcionario.query.filter_by(periodo=periodo_opcao).count()
+    
     return render_template(
         "escala_periodo.html",
         periodo=periodo,
         funcionarios=funcionarios,
         datas=datas,
         escala_dias=escala_dias,
-        enumerate=enumerate  # Passar enumerate para o template
+        horas_extras=horas_extras_dict,  # Horas extras para o template
+        totais_por_dia=totais_por_dia,    # Totais para o rodapé (agora incluindo horas extras)
+        enumerate=enumerate,
+        # Estatísticas
+        total_funcionarios=total_funcionarios,
+        total_ativos=total_ativos,
+        total_inativos=total_inativos,
+        contagem_escalas=contagem_escalas,
+        contagem_periodos=contagem_periodos
     )
 
 
+# NOVA ROTA para salvar hora extra via AJAX
+@periodo.route("/api/hora-extra", methods=['POST'])
+def salvar_hora_extra():
+    """Salva ou remove uma hora extra"""
+    try:
+        data = request.get_json()
+        
+        funcionario_id = data.get('funcionario_id')
+        data_str = data.get('data')
+        periodo_id = data.get('periodo_id')
+        ativo = data.get('ativo', True)  # True = adicionar, False = remover
+        descricao = data.get('descricao', 'Hora extra')
+        
+        
+        data_obj = datetime.strptime(data_str, '%Y-%m-%d').date()
+        
+        if ativo:
+            # Adicionar hora extra
+            he = HoraExtra.query.filter_by(
+                funcionario_id=funcionario_id,
+                data=data_obj,
+                periodo_id=periodo_id
+            ).first()
+            
+            if not he:
+                he = HoraExtra(
+                    funcionario_id=funcionario_id,
+                    data=data_obj,
+                    periodo_id=periodo_id,
+                    descricao=descricao
+                )
+                db.session.add(he)
+                db.session.commit()
+                return jsonify({'success': True, 'mensagem': 'Hora extra adicionada com sucesso!'})
+            else:
+                return jsonify({'success': False, 'mensagem': 'Hora extra já existe para este dia!'})
+        else:
+            # Remover hora extra
+            he = HoraExtra.query.filter_by(
+                funcionario_id=funcionario_id,
+                data=data_obj,
+                periodo_id=periodo_id
+            ).first()
+            
+            if he:
+                db.session.delete(he)
+                db.session.commit()
+                return jsonify({'success': True, 'mensagem': 'Hora extra removida com sucesso!'})
+            else:
+                return jsonify({'success': False, 'mensagem': 'Hora extra não encontrada!'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'mensagem': f'Erro: {str(e)}'})
 
 @periodo.route("/periodos/detalhes/<int:id>")
 def detalhes_periodo(id):

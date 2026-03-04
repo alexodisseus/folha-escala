@@ -3,6 +3,9 @@ from sqlalchemy.orm import validates
 from datetime import datetime, date, timedelta
 import calendar
 
+
+
+
 class Funcionario(db.Model):
     __tablename__ = "funcionarios"
     
@@ -265,3 +268,40 @@ class Feriado(db.Model):
     
     def __repr__(self):
         return f"<Feriado {self.data}: {self.nome}>"
+
+
+
+class HoraExtra(db.Model):
+    __tablename__ = 'horas_extras'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionarios.id'), nullable=False)
+    periodo_id = db.Column(db.Integer, db.ForeignKey('periodos_mensais.id'), nullable=False)
+    data = db.Column(db.Date, nullable=False)
+    descricao = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    funcionario = db.relationship('Funcionario', backref=db.backref('horas_extras', lazy='dynamic', cascade='all, delete-orphan'))
+    periodo = db.relationship('PeriodoMensal', backref=db.backref('horas_extras', lazy='dynamic', cascade='all, delete-orphan'))
+    
+    # Garantir que não haja duplicatas (mesmo funcionário não pode ter duas horas extras no mesmo dia/período)
+    __table_args__ = (
+        db.UniqueConstraint('funcionario_id', 'data', 'periodo_id', name='unique_hora_extra'),
+    )
+    
+    def __repr__(self):
+        return f'<HoraExtra {self.funcionario.nome} - {self.data}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'funcionario_id': self.funcionario_id,
+            'funcionario_nome': self.funcionario.nome if self.funcionario else None,
+            'periodo_id': self.periodo_id,
+            'data': self.data.strftime('%Y-%m-%d'),
+            'data_formatada': self.data.strftime('%d/%m/%Y'),
+            'descricao': self.descricao,
+            'created_at': self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else None
+        }
