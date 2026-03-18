@@ -272,8 +272,68 @@ def escala_periodo(id):
         total_ativos=total_ativos,
         total_inativos=total_inativos,
         contagem_escalas=contagem_escalas,
-        contagem_periodos=contagem_periodos
+        contagem_periodos=contagem_periodos,
+        id=id
     )
+
+
+@periodo.route("/periodos/relatorio/<int:id>")
+def relatorio_periodo(id):
+    """Relatório de funcionários com hora extra no período (somente dias)"""
+
+    periodo = PeriodoMensal.query.get_or_404(id)
+
+    # =========================
+    # BUSCAR HORAS EXTRAS + FUNCIONÁRIOS
+    # =========================
+    registros = (
+        db.session.query(HoraExtra, Funcionario)
+        .join(Funcionario, Funcionario.id == HoraExtra.funcionario_id)
+        .filter(HoraExtra.periodo_id == id)
+        .order_by(Funcionario.nome, HoraExtra.data)
+        .all()
+    )
+
+    # =========================
+    # AGRUPAR POR FUNCIONÁRIO
+    # =========================
+    relatorio = {}
+
+    for he, func in registros:
+        func_id = func.id
+
+        if func_id not in relatorio:
+            relatorio[func_id] = {
+                "matricula": func.matricula,
+                "nome": func.nome,
+                "dias": set()  # usamos set para evitar duplicados
+            }
+
+        # adicionar dia
+        relatorio[func_id]["dias"].add(he.data.strftime('%d'))
+
+    # =========================
+    # ORDENAR DIAS
+    # =========================
+    for func in relatorio.values():
+        func["dias"] = sorted(func["dias"], key=lambda x: int(x))
+
+    # =========================
+    # TOTAL DE FUNCIONÁRIOS COM EXTRA
+    # =========================
+    total_funcionarios = len(relatorio)
+
+    # =========================
+    # RENDER
+    # =========================
+    return render_template(
+        "relatorio_periodo.html",
+        periodo=periodo,
+        relatorio=relatorio,
+        total_funcionarios=total_funcionarios
+    )
+
+
 
 
 # NOVA ROTA para salvar hora extra via AJAX

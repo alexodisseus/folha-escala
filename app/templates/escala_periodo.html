@@ -13,6 +13,7 @@
     {% endif %}
 {% endwith %}
 
+
 <!-- LOADING STATE -->
 <div id="loading" class="text-center py-5" style="display: none;">
     <div class="spinner-border text-primary" role="status">
@@ -52,6 +53,9 @@
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalLegenda">
             📖 Legenda
         </button>
+        <a href="{{ url_for('periodo.relatorio_periodo' , id=id) }}" class="btn btn-secondary">
+            📖 C . I .
+        </a>
     </div>
 </div>
 

@@ -35,7 +35,7 @@ def funcionarios():
         ativo = filtro_ativo.lower() == 'true'
         query = query.filter(Funcionario.ativo == ativo)
 
-    paginacao = query.order_by(Funcionario.nome).paginate(page=page, per_page=5)
+    paginacao = query.order_by(Funcionario.nome).paginate(page=page, per_page=10)
 
     total_ativos = Funcionario.query.filter_by(ativo=True).count()
     
